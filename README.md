@@ -38,5 +38,9 @@ examples/
 - scripts are intended for demo and learning purposes
 - scripts should be tested before use in production environments
 
+## Example Scripts
+- inactive-users-report.ps1
+- detect-outdated-7zip.ps1
+
 ## Author
 Metodi Todorinov
