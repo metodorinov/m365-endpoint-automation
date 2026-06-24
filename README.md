@@ -40,7 +40,9 @@ examples/
 
 ## Example Scripts
 - inactive-users-report.ps1
+- device-compliance-report.ps1
 - detect-outdated-7zip.ps1
+- remediate-outdated-7zip.ps1
 
 ## Author
 Metodi Todorinov
