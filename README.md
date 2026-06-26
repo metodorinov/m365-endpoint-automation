@@ -44,6 +44,6 @@ examples/
 - detect-outdated-7zip.ps1
 - remediate-outdated-7zip.ps1
 - users-without-mfa.ps1
-
+- risky-users-report.ps1
 ## Author
 Metodi Todorinov
