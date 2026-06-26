@@ -43,6 +43,7 @@ examples/
 - device-compliance-report.ps1
 - detect-outdated-7zip.ps1
 - remediate-outdated-7zip.ps1
+- users-without-mfa.ps1
 
 ## Author
 Metodi Todorinov
