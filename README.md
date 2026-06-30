@@ -45,5 +45,6 @@ examples/
 - remediate-outdated-7zip.ps1
 - users-without-mfa.ps1
 - risky-users-report.ps1
+- autopilot-enrollment.ps1
 ## Author
 Metodi Todorinov
