@@ -46,5 +46,7 @@ examples/
 - users-without-mfa.ps1
 - risky-users-report.ps1
 - autopilot-enrollment.ps1
+- detect-vs-python-runtime.ps1
+- remediate-vs-python-runtime.ps1
 ## Author
 Metodi Todorinov
