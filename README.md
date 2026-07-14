@@ -48,5 +48,6 @@ examples/
 - autopilot-enrollment.ps1
 - detect-vs-python-runtime.ps1
 - remediate-vs-python-runtime.ps1
+- remediate-windows-update.ps1
 ## Author
 Metodi Todorinov
