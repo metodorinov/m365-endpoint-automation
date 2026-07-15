@@ -49,5 +49,6 @@ examples/
 - detect-vs-python-runtime.ps1
 - remediate-vs-python-runtime.ps1
 - remediate-windows-update.ps1
+- disable-ipv6.ps1
 ## Author
 Metodi Todorinov
