@@ -178,4 +178,235 @@ foreach ($FirefoxDirectory in $MachineFirefoxPaths) {
 
 
 # -------------------------------------------------------------------
-# 4. Remove per-user 
+# 4. Remove per-user Firefox installations
+#
+# IMPORTANT:
+# This targets AppData\Local\Mozilla Firefox only.
+# AppData\Roaming\Mozilla\Firefox profiles are NOT deleted.
+# -------------------------------------------------------------------
+
+$PerUserFirefox = Get-ChildItem `
+    -Path 'C:\Users\*\AppData\Local\Mozilla Firefox' `
+    -Directory `
+    -ErrorAction SilentlyContinue
+
+foreach ($UserInstall in $PerUserFirefox) {
+
+    $UserFirefoxDirectory = $UserInstall.FullName
+    $Helper = Join-Path $UserFirefoxDirectory 'uninstall\helper.exe'
+    $FirefoxExe = Join-Path $UserFirefoxDirectory 'firefox.exe'
+
+    Write-Log "Per-user Firefox installation found: $UserFirefoxDirectory"
+
+    if (Test-Path $Helper) {
+
+        Start-Process `
+            -FilePath $Helper `
+            -ArgumentList '/S' `
+            -Wait `
+            -ErrorAction SilentlyContinue
+
+        Wait-PathGone -Path $FirefoxExe -TimeoutSeconds 60 | Out-Null
+    }
+
+    if (Test-Path $UserFirefoxDirectory) {
+
+        Remove-Item `
+            -Path $UserFirefoxDirectory `
+            -Recurse `
+            -Force `
+            -ErrorAction SilentlyContinue
+    }
+
+    if (-not (Test-Path $UserFirefoxDirectory)) {
+        Write-Log "Per-user Firefox installation removed: $UserFirefoxDirectory"
+    }
+    else {
+        Write-Log "WARNING: Could not completely remove per-user installation: $UserFirefoxDirectory"
+    }
+}
+
+
+# -------------------------------------------------------------------
+# 5. Remove orphaned Firefox uninstall registry entries
+# -------------------------------------------------------------------
+
+$UninstallRoots = @(
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+)
+
+foreach ($RegistryRoot in $UninstallRoots) {
+
+    if (-not (Test-Path $RegistryRoot)) {
+        continue
+    }
+
+    Get-ChildItem -Path $RegistryRoot -ErrorAction SilentlyContinue |
+        ForEach-Object {
+
+            $RegistryEntry = $_
+
+            $Properties = Get-ItemProperty `
+                -Path $RegistryEntry.PSPath `
+                -ErrorAction SilentlyContinue
+
+            if ($Properties.DisplayName -like 'Mozilla Firefox*') {
+
+                $EntryName = $RegistryEntry.PSChildName
+                $DisplayName = $Properties.DisplayName
+
+                Remove-Item `
+                    -Path $RegistryEntry.PSPath `
+                    -Recurse `
+                    -Force `
+                    -ErrorAction SilentlyContinue
+
+                Write-Log "Firefox uninstall entry removed: $DisplayName [$EntryName]"
+            }
+        }
+}
+
+
+# -------------------------------------------------------------------
+# 6. Clear Intune Win32 app retry/cooldown state
+#    ONLY for the Firefox Intune App IDs listed above
+# -------------------------------------------------------------------
+
+$IMEWin32AppsPath = 'HKLM:\SOFTWARE\Microsoft\IntuneManagementExtension\Win32Apps'
+
+if (Test-Path $IMEWin32AppsPath) {
+
+    $IMEUserKeys = Get-ChildItem `
+        -Path $IMEWin32AppsPath `
+        -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.PSChildName -ne 'Reporting'
+        }
+
+    foreach ($IMEUserKey in $IMEUserKeys) {
+
+        $UserKeyPath = $IMEUserKey.PSPath
+
+        foreach ($AppId in $FirefoxAppIds) {
+
+            if (:IsNullOrWhiteSpace($AppId) -or
+                $AppId -like 'xxxxxxxx-*') {
+
+                continue
+            }
+
+
+            # Remove application-specific state
+            Get-ChildItem `
+                -Path $UserKeyPath `
+                -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.PSChildName -like "$AppId*"
+                } |
+                ForEach-Object {
+
+                    Write-Log "Removing Intune app state: $($_.PSChildName)"
+
+                    Remove-Item `
+                        -Path $_.PSPath `
+                        -Recurse `
+                        -Force `
+                        -ErrorAction SilentlyContinue
+                }
+
+
+            # Check GRS state
+            $GRSPath = Join-Path $UserKeyPath 'GRS'
+
+            if (Test-Path $GRSPath) {
+
+                Get-ChildItem `
+                    -Path $GRSPath `
+                    -ErrorAction SilentlyContinue |
+                    ForEach-Object {
+
+                        $GRSEntry = $_
+
+                        $Properties = Get-ItemProperty `
+                            -Path $GRSEntry.PSPath `
+                            -ErrorAction SilentlyContinue
+
+                        $PropertyValues = @(
+                            $Properties.PSObject.Properties |
+                                Where-Object {
+                                    $_.Name -notlike 'PS*'
+                                } |
+                                ForEach-Object {
+                                    [string]$_.Value
+                                }
+                        )
+
+                        $ContainsAppId = $false
+
+                        foreach ($Value in $PropertyValues) {
+
+                            if ($Value -match :Escape($AppId)) {
+                                $ContainsAppId = $true
+                                break
+                            }
+                        }
+
+                        if ($ContainsAppId) {
+
+                            Write-Log "Removing matching Intune GRS entry: $($GRSEntry.PSChildName)"
+
+                            Remove-Item `
+                                -Path $GRSEntry.PSPath `
+                                -Recurse `
+                                -Force `
+                                -ErrorAction SilentlyContinue
+                        }
+                    }
+            }
+        }
+    }
+
+    Write-Log 'Intune retry state processing completed for specified Firefox apps.'
+}
+else {
+
+    Write-Log 'WARNING: Intune Win32Apps registry path was not found.'
+}
+
+
+# -------------------------------------------------------------------
+# 7. Restart Intune Management Extension
+# -------------------------------------------------------------------
+
+$IMEService = Get-Service `
+    -Name 'IntuneManagementExtension' `
+    -ErrorAction SilentlyContinue
+
+if ($IMEService) {
+
+    Write-Log 'Restarting Intune Management Extension...'
+
+    Restart-Service `
+        -Name 'IntuneManagementExtension' `
+        -Force `
+        -ErrorAction SilentlyContinue
+
+    Start-Sleep -Seconds 3
+
+    $IMEService = Get-Service `
+        -Name 'IntuneManagementExtension' `
+        -ErrorAction SilentlyContinue
+
+    Write-Log "Intune Management Extension status: $($IMEService.Status)"
+}
+else {
+
+    Write-Log 'WARNING: Intune Management Extension service was not found.'
+}
+
+
+Write-Log 'Firefox removal completed. Intune reinstall is now pending.'
+Write-Log '========== Firefox remediation completed =========='
+
+exit 0
