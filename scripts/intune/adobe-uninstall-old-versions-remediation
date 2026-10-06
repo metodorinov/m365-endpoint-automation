@@ -1,0 +1,33 @@
+$RequiredVersion = [version]"2026.1.21789.0"
+
+$Products = Get-ItemProperty `
+    -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" ,
+          "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" `
+    -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.DisplayName -like "Adobe Acrobat*" -and
+        $_.DisplayVersion -and
+        ([version]$_.DisplayVersion -lt $RequiredVersion)
+    }
+
+foreach ($Product in $Products)
+{
+    Write-Output "Found: $($Product.DisplayName) $($Product.DisplayVersion)"
+
+    if ($Product.UninstallString -match '\{[A-Z0-9\-]+\}')
+    {
+        $ProductCode = $matches[0]
+
+        Write-Output "Uninstalling MSI product: $ProductCode"
+
+        $Process = Start-Process `
+            -FilePath "msiexec.exe" `
+            -ArgumentList "/x $ProductCode /qn /norestart" `
+            -Wait `
+            -PassThru
+
+        Write-Output "Exit Code: $($Process.ExitCode)"
+    }
+}
+
+exit 0
