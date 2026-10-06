@@ -1,0 +1,36 @@
+$RequiredVersion = [version]"2026.1.21789.0"
+
+$Paths = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+)
+
+$AdobeProducts = Get-ItemProperty $Paths -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.DisplayName -match "Adobe Acrobat"
+    }
+
+if (-not $AdobeProducts) {
+    Write-Output "Adobe Acrobat not found"
+    exit 0
+}
+
+foreach ($Product in $AdobeProducts) {
+
+    try {
+        $InstalledVersion = [version]$Product.DisplayVersion
+
+        if ($InstalledVersion -lt $RequiredVersion) {
+            Write-Output "Old version detected: $InstalledVersion"
+            exit 1
+        }
+    }
+    catch {
+        Write-Output "Unable to evaluate version: $($Product.DisplayVersion)"
+        exit 1
+    }
+}
+
+Write-Output "Compliant"
+exit 0
+``
