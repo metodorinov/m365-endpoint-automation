@@ -41,14 +41,14 @@ examples/
 ## Example Scripts
 - inactive-users-report.ps1
 - device-compliance-report.ps1
-- detect-outdated-7zip.ps1
 - remediate-outdated-7zip.ps1
 - users-without-mfa.ps1
 - risky-users-report.ps1
 - autopilot-enrollment.ps1
-- detect-vs-python-runtime.ps1
 - remediate-vs-python-runtime.ps1
+- vuln-firefox-remediation-script-157.0.ps1
 - remediate-windows-update.ps1
 - disable-ipv6.ps1
+- adobe-uninstall-old-versions-remediation
 ## Author
 Metodi Todorinov
