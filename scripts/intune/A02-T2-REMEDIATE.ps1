@@ -1,0 +1,154 @@
+﻿# A02-T2-REMEDIATE
+# Removes Microsoft Teams Personal only.
+# Does not target the MSTeams managed work client.
+# Does not modify DeletedAllUserPackages.
+# Intended context: SYSTEM, 64-bit PowerShell.
+
+$ErrorActionPreference = 'Stop'
+
+$Id     = 'A02'
+$Name   = 'MicrosoftTeams'
+$Family = 'MicrosoftTeams_8wekyb3d8bbwe'
+
+$LogDirectory = 'C:\ProgramData\VulnRemediation'
+$LogPath      = Join-Path -Path $LogDirectory -ChildPath "$Id.log"
+
+New-Item `
+    -Path $LogDirectory `
+    -ItemType Directory `
+    -Force `
+    -ErrorAction Stop |
+Out-Null
+
+function Write-A02Log {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Message
+    )
+
+    $Entry = "$(Get-Date -Format 's') $Message"
+
+    Add-Content `
+        -LiteralPath $LogPath `
+        -Value $Entry `
+        -ErrorAction Stop
+
+    Write-Output $Entry
+}
+
+try {
+    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    Write-A02Log "A02 remediation started under $Identity"
+
+    # The production version is intended to run under SYSTEM.
+    if ($Identity -notmatch 'SYSTEM$') {
+        throw "Remediation must run as SYSTEM. Current identity: $Identity"
+    }
+
+    # Remove active Teams Personal registrations for all users.
+    $InstalledPackages = @(
+        Get-AppxPackage `
+            -AllUsers `
+            -Name $Name `
+            -ErrorAction Stop |
+        Where-Object {
+            $_.PackageFamilyName -eq $Family
+        }
+    )
+
+    foreach ($Package in $InstalledPackages) {
+        Remove-AppxPackage `
+            -Package $Package.PackageFullName `
+            -AllUsers `
+            -ErrorAction Stop
+
+        Write-A02Log "Removed active Teams Personal package: $($Package.PackageFullName)"
+    }
+
+    # Remove Teams Personal from Windows provisioning.
+    $ProvisionedPackages = @(
+        Get-AppxProvisionedPackage `
+            -Online `
+            -ErrorAction Stop |
+        Where-Object {
+            $_.DisplayName -eq $Name
+        }
+    )
+
+    foreach ($Package in $ProvisionedPackages) {
+        Remove-AppxProvisionedPackage `
+            -Online `
+            -PackageName $Package.PackageName `
+            -AllUsers `
+            -ErrorAction Stop |
+        Out-Null
+
+        Write-A02Log "Removed provisioned Teams Personal package: $($Package.PackageName)"
+    }
+
+    # Verify Teams Personal active registrations.
+    $RemainingInstalled = @(
+        Get-AppxPackage `
+            -AllUsers `
+            -Name $Name `
+            -ErrorAction Stop |
+        Where-Object {
+            $_.PackageFamilyName -eq $Family
+        }
+    )
+
+    # Verify Teams Personal provisioning.
+    $RemainingProvisioned = @(
+        Get-AppxProvisionedPackage `
+            -Online `
+            -ErrorAction Stop |
+        Where-Object {
+            $_.DisplayName -eq $Name
+        }
+    )
+
+    if (
+        $RemainingInstalled.Count -gt 0 -or
+        $RemainingProvisioned.Count -gt 0
+    ) {
+        $RemainingItems = @(
+            $RemainingInstalled.PackageFullName
+            $RemainingProvisioned.PackageName
+        ) |
+        Where-Object { $_ } |
+        Sort-Object -Unique
+
+        Write-A02Log "REMAINS A02: $($RemainingItems -join '; ')"
+        exit 1
+    }
+
+    # This is informational only. MSTeams is not required to exist on every
+    # device, but the remediation must never remove or modify it.
+    $WorkTeams = @(
+        Get-AppxPackage `
+            -AllUsers `
+            -Name 'MSTeams' `
+            -ErrorAction Stop
+    )
+
+    if ($WorkTeams.Count -gt 0) {
+        $WorkTeamsVersions = @(
+            $WorkTeams |
+            ForEach-Object {
+                "$($_.PackageFullName)"
+            }
+        ) -join '; '
+
+        Write-A02Log "Protected work client remains detected: $WorkTeamsVersions"
+    }
+    else {
+        Write-A02Log 'Informational: MSTeams was not detected. The remediation did not target MSTeams.'
+    }
+
+    Write-A02Log 'SUCCESS A02: MicrosoftTeams Personal installation and provisioning are absent.'
+    exit 0
+}
+catch {
+    Write-A02Log "FAILED A02 remediation: $($_.Exception.Message)"
+    exit 1
+}
