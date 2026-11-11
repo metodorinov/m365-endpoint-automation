@@ -50,6 +50,7 @@ examples/
 - remediate-windows-update.ps1
 - disable-ipv6.ps1
 - adobe-uninstall-old-versions-remediation
-- vuln-msteams-remediation.ps1
+- vuln-msteams-remediatio.ps1
+- vuln-msteams-personal-removal-remediation.ps1
 ## Author
 Metodi Todorinov
