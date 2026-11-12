@@ -52,5 +52,6 @@ examples/
 - adobe-uninstall-old-versions-remediation
 - vuln-msteams-remediatio.ps1
 - vuln-msteams-personal-removal-remediation.ps1
+- vuln-azurecli-remediation.ps1
 ## Author
 Metodi Todorinov
